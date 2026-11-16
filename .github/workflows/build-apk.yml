@@ -2,7 +2,11 @@ name: Build APK
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -21,8 +25,30 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk LockTodo.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: LockTodo-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: LockTodo.apk
+
+      - name: Publish as a release (download on your phone)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest LockTodo.apk \
+            --title "LockTodo (latest build)" \
+            --notes "Open this page on your Android phone and tap LockTodo.apk to download and install."
+
+      - name: Save APK to the 'apk' branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          mkdir -p /tmp/out && cp LockTodo.apk /tmp/out/
+          git checkout --orphan apk
+          git rm -rfq .
+          cp /tmp/out/LockTodo.apk .
+          git add LockTodo.apk
+          git commit -qm "Latest APK build"
+          git push -f origin apk
